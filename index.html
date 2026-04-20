@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>文字雲 — 輸入頁</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #0f172a;
+      font-family: 'Noto Sans TC', sans-serif;
+      padding: 24px;
+    }
+    h1 {
+      color: #f1f5f9;
+      font-size: 1.8rem;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+    p.subtitle {
+      color: #94a3b8;
+      margin-bottom: 32px;
+      text-align: center;
+      font-size: 1rem;
+    }
+    .card {
+      background: #1e293b;
+      border-radius: 16px;
+      padding: 32px;
+      width: 100%;
+      max-width: 480px;
+      box-shadow: 0 4px 32px rgba(0,0,0,0.4);
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 14px 16px;
+      font-size: 1.2rem;
+      border-radius: 10px;
+      border: 2px solid #334155;
+      background: #0f172a;
+      color: #f1f5f9;
+      outline: none;
+      transition: border-color 0.2s;
+      text-align: center;
+    }
+    input[type="text"]:focus {
+      border-color: #6366f1;
+    }
+    button {
+      margin-top: 16px;
+      width: 100%;
+      padding: 14px;
+      font-size: 1.1rem;
+      font-weight: bold;
+      background: #6366f1;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+    }
+    button:hover { background: #4f46e5; }
+    button:active { transform: scale(0.98); }
+    button:disabled { background: #475569; cursor: not-allowed; }
+    .message {
+      margin-top: 20px;
+      text-align: center;
+      font-size: 1rem;
+      min-height: 24px;
+    }
+    .message.success { color: #34d399; }
+    .message.error   { color: #f87171; }
+    .cloud-link {
+      margin-top: 24px;
+      text-align: center;
+    }
+    .cloud-link a {
+      color: #818cf8;
+      text-decoration: none;
+      font-size: 0.9rem;
+    }
+    .cloud-link a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <h1>📝 請輸入一個詞</h1>
+  <p class="subtitle">你的詞會即時出現在文字雲上</p>
+  <div class="card">
+    <input type="text" id="wordInput" placeholder="輸入詞語" maxlength="20" autocomplete="off" />
+    <button id="submitBtn" onclick="submitWord()">送出</button>
+    <div class="message" id="message"></div>
+    <div class="cloud-link">
+      <a href="cloud.html" target="_blank">📊 查看即時文字雲 →</a>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+    import { getFirestore, collection, addDoc, serverTimestamp }
+      from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDOyazYCHo0oE-1d-1-5Ii1UMCodb7Rfr8",
+      authDomain: "diy-work-af63e.firebaseapp.com",
+      projectId: "diy-work-af63e",
+      storageBucket: "diy-work-af63e.firebasestorage.app",
+      messagingSenderId: "300082462154",
+      appId: "1:300082462154:web:a39a1084e304622d1ee333"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db  = getFirestore(app);
+
+    window.submitWord = async function () {
+      const input  = document.getElementById('wordInput');
+      const btn    = document.getElementById('submitBtn');
+      const msgEl  = document.getElementById('message');
+      const word   = input.value.trim();
+
+      if (!word) {
+        msgEl.className = 'message error';
+        msgEl.textContent = '請輸入詞語';
+        return;
+      }
+
+      btn.disabled = true;
+      msgEl.className = 'message';
+      msgEl.textContent = '送出中…';
+
+      try {
+        await addDoc(collection(db, 'wordcloud_words'), {
+          word,
+          timestamp: serverTimestamp()
+        });
+        msgEl.className = 'message success';
+        msgEl.textContent = `✅ 「${word}」已送出！`;
+        input.value = '';
+      } catch (e) {
+        msgEl.className = 'message error';
+        msgEl.textContent = '送出失敗，請再試一次';
+        console.error(e);
+      } finally {
+        btn.disabled = false;
+        input.focus();
+      }
+    };
+
+    document.getElementById('wordInput').addEventListener('keydown', e => {
+      if (e.key === 'Enter') window.submitWord();
+    });
+  </script>
+</body>
+</html>

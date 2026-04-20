@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>即時文字雲</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      background: #0f172a;
+      font-family: 'Noto Sans TC', sans-serif;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 24px;
+      background: #1e293b;
+      border-bottom: 1px solid #334155;
+    }
+    header h1 {
+      color: #f1f5f9;
+      font-size: 1.2rem;
+    }
+    #wordCount {
+      color: #94a3b8;
+      font-size: 0.9rem;
+    }
+    #clearBtn {
+      padding: 6px 14px;
+      background: #ef4444;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    #clearBtn:hover { background: #dc2626; }
+    #cloud {
+      flex: 1;
+      position: relative;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 12px 20px;
+      padding: 40px;
+      align-content: center;
+    }
+    .word-item {
+      display: inline-block;
+      font-weight: bold;
+      border-radius: 8px;
+      padding: 4px 8px;
+      animation: pop 0.4s ease;
+      transition: transform 0.3s, font-size 0.5s;
+      cursor: default;
+      line-height: 1.2;
+    }
+    @keyframes pop {
+      0%   { transform: scale(0.3); opacity: 0; }
+      70%  { transform: scale(1.15); }
+      100% { transform: scale(1);   opacity: 1; }
+    }
+    #empty {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #475569;
+      font-size: 1.2rem;
+      text-align: center;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>☁️ 即時文字雲</h1>
+    <span id="wordCount">載入中…</span>
+    <button id="clearBtn" onclick="clearAll()">清除全部</button>
+  </header>
+  <div id="cloud">
+    <div id="empty">等待輸入…</div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+    import { getFirestore, collection, onSnapshot, getDocs, deleteDoc, doc }
+      from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDOyazYCHo0oE-1d-1-5Ii1UMCodb7Rfr8",
+      authDomain: "diy-work-af63e.firebaseapp.com",
+      projectId: "diy-work-af63e",
+      storageBucket: "diy-work-af63e.firebasestorage.app",
+      messagingSenderId: "300082462154",
+      appId: "1:300082462154:web:a39a1084e304622d1ee333"
+    };
+
+    const COLORS = [
+      '#818cf8','#34d399','#fb923c','#f472b6',
+      '#38bdf8','#a3e635','#fbbf24','#e879f9',
+      '#4ade80','#60a5fa','#f87171','#2dd4bf'
+    ];
+
+    const app = initializeApp(firebaseConfig);
+    const db  = getFirestore(app);
+    const cloudEl    = document.getElementById('cloud');
+    const emptyEl    = document.getElementById('empty');
+    const countEl    = document.getElementById('wordCount');
+
+    // 依顏色索引固定詞語顏色（同一個詞每次顏色一樣）
+    function colorFor(word) {
+      let h = 0;
+      for (let i = 0; i < word.length; i++) h = (h * 31 + word.charCodeAt(i)) & 0xffff;
+      return COLORS[h % COLORS.length];
+    }
+
+    // 依次數決定字體大小（1次=1rem，最大6rem）
+    function sizeFor(count, max) {
+      const ratio = max > 1 ? count / max : 1;
+      return (1 + ratio * 5).toFixed(2);
+    }
+
+    onSnapshot(collection(db, 'wordcloud_words'), snapshot => {
+      // 統計詞頻
+      const freq = {};
+      snapshot.forEach(d => {
+        const w = (d.data().word || '').trim();
+        if (w) freq[w] = (freq[w] || 0) + 1;
+      });
+
+      const total = snapshot.size;
+      const words = Object.keys(freq);
+      const max   = words.length ? Math.max(...words.map(w => freq[w])) : 1;
+
+      // 更新計數
+      countEl.textContent = `共 ${total} 筆 / ${words.length} 種詞`;
+      emptyEl.style.display = words.length ? 'none' : 'block';
+
+      // 清空並重繪（保留 #empty）
+      Array.from(cloudEl.querySelectorAll('.word-item')).forEach(el => el.remove());
+
+      // 依頻率排序，高頻在中間（先放高頻）
+      words.sort((a, b) => freq[b] - freq[a]).forEach(word => {
+        const el = document.createElement('span');
+        el.className = 'word-item';
+        el.textContent = `${word}`;
+        if (freq[word] > 1) el.textContent += ` ×${freq[word]}`;
+        el.style.fontSize  = `${sizeFor(freq[word], max)}rem`;
+        el.style.color     = colorFor(word);
+        cloudEl.appendChild(el);
+      });
+    });
+
+    window.clearAll = async function () {
+      if (!confirm('確定要清除所有詞語嗎？')) return;
+      const snap = await getDocs(collection(db, 'wordcloud_words'));
+      const deletes = snap.docs.map(d => deleteDoc(doc(db, 'wordcloud_words', d.id)));
+      await Promise.all(deletes);
+    };
+  </script>
+</body>
+</html>
